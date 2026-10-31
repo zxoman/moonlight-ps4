@@ -1,0 +1,46 @@
+CC ?= cc
+CFLAGS ?= -std=c11 -Wall -Wextra -O2 -Iinclude -Isrc/core
+LDFLAGS ?=
+
+CORE := \
+	src/core/config.c \
+	src/core/gs.c \
+	src/core/http.c \
+	src/core/log.c \
+	src/core/rtsp.c \
+	src/core/rtp.c \
+	src/core/stream.c \
+	src/core/util.c \
+	src/core/xml.c
+
+HOST_APP := \
+	$(CORE) \
+	src/core/app.c \
+	src/platform/host/ui.c \
+	src/platform/host/input.c \
+	src/platform/host/main.c
+
+ifeq ($(OS),Windows_NT)
+  LDFLAGS += -lws2_32
+endif
+
+.PHONY: all test cli clean
+
+all: test cli
+
+build-host:
+	mkdir -p build-host
+
+build-host/test_core: build-host tests/test_core.c $(CORE)
+	$(CC) $(CFLAGS) -o $@ tests/test_core.c $(CORE) $(LDFLAGS)
+
+build-host/moonlight-host: build-host $(HOST_APP)
+	$(CC) $(CFLAGS) -o $@ $(HOST_APP) $(LDFLAGS)
+
+test: build-host/test_core
+	./build-host/test_core
+
+cli: build-host/moonlight-host
+
+clean:
+	rm -rf build-host

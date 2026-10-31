@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-test:
+    name: Host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Protocol checks (Python)
+        run: python tests/test_protocol.py
+      - name: Build and test protocol core
+        run: make -f Makefile.host test cli
+      - name: Smoke UI path
+        run: ./build-host/moonlight-host --ui
+      - name: Upload host binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlight-host-linux
+          path: build-host/moonlight-host
+
+  ps4-pkg:
+    name: PS4 PKG (OpenOrbis)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build eboot and PKG
+        uses: OpenOrbis/toolchain-action@main
+        with:
+          version: latest
+          command: make
+      - name: Upload PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlight-ps4-pkg
+          path: |
+            *.pkg
+            eboot.bin
+          if-no-files-found: error
