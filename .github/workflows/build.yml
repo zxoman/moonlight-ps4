@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -44,36 +46,35 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Prepare Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential make wget unzip libarchive-tools llvm lld clang
+          sudo apt-get install -y build-essential make wget unzip libarchive-tools clang lld cmake ninja-build git curl libssl-dev
 
       - name: Setup OpenOrbis Toolchain
         run: |
-          wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.3/toolchain-llvm-18.2.zip -O toolchain.zip
-          unzip -q toolchain.zip
-          tar -xzf toolchain-llvm-18.tar.gz -C ${{ github.workspace }}
-          echo "OO_PS4_TOOLCHAIN=${{ github.workspace }}/PS4Toolchain" >> $GITHUB_ENV
-          echo "${{ github.workspace }}/PS4Toolchain/bin" >> $GITHUB_PATH
+          mkdir -p ~/ps4dev/OpenOrbis
+          git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git ~/ps4dev/OpenOrbis/PS4Toolchain
+          echo "OO_PS4_TOOLCHAIN=$HOME/ps4dev/OpenOrbis/PS4Toolchain" >> $GITHUB_ENV
 
-      - name: Build eboot and PKG
-        run: make
-        env:
-          OO_PS4_TOOLCHAIN: ${{ github.workspace }}/PS4Toolchain
-
-      - name: Verify PKG Generation
+      - name: Setup Dependencies and Build FFmpeg for PS4
         run: |
-          ls -la *.pkg || echo "No .pkg file found in root directory"
-          ls -la build/ || echo "Checking build directory..."
+          chmod +x scripts/*.sh
+          ./scripts/setup_deps.sh
+          ./scripts/build_ffmpeg_ps4.sh
+
+      - name: Build PS4 Package (.pkg)
+        run: |
+          ./scripts/build_pkg.sh
 
       - name: Upload PKG Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: moonlight-ps4-pkg
           path: |
+            build-ps4/*.pkg
             *.pkg
-            **/$*.pkg
-            eboot.bin
-          if-no-files-found: warn
+          if-no-files-found: error
