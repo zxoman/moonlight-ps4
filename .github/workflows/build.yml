@@ -55,9 +55,11 @@ jobs:
           wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/latest/download/toolchain-linux.tar.gz -O toolchain.tar.gz || \
           wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/archive/refs/heads/master.zip -O toolchain.zip && unzip -q toolchain.zip
           echo "OO_PS4_TOOLCHAIN=${{ github.workspace }}/OpenOrbis-PS4-Toolchain-master" >> $GITHUB_ENV
+          echo "${{ github.workspace }}/OpenOrbis-PS4-Toolchain-master/bin" >> $GITHUB_PATH
 
       - name: Build eboot and PKG
-        run: make
+        run: |
+          make CC=orbis-clang CXX=orbis-clang++
         env:
           OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis-PS4-Toolchain-master
 
