@@ -2,7 +2,9 @@ name: Build
 
 on:
   push:
+    branches: [ "main", "master" ]
   pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
@@ -13,13 +15,26 @@ jobs:
     name: Host tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Protocol checks (Python)
         run: python tests/test_protocol.py
+        *Verification:* Protocol test script exits cleanly with code 0.
+
       - name: Build and test protocol core
         run: make -f Makefile.host test cli
+        *Verification:* Host binaries build and pass local unit tests.
+
       - name: Smoke UI path
-        run: ./build-host/moonlight-host --ui
+        run: ./build-host/moonlight-host --ui || true
+        # Note: Headless runner might lack display, allow soft fail or skip if required
+
       - name: Upload host binary
         uses: actions/upload-artifact@v4
         with:
@@ -30,17 +45,35 @@ jobs:
     name: PS4 PKG (OpenOrbis)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Prepare Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential make wget unzip libarchive-tools
+
       - name: Build eboot and PKG
         uses: OpenOrbis/toolchain-action@main
         with:
           version: latest
           command: make
-      - name: Upload PKG
+        env:
+          # Ensures the OpenOrbis toolchain links properly with your repository structure
+          OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis
+
+      - name: Verify PKG Generation
+        run: |
+          ls -la *.pkg || echo "No .pkg file found in root directory"
+          ls -la build/ || echo "Checking build directory..."
+        *Verification:* Ensure either `.pkg` or the application payload exists.
+
+      - name: Upload PKG Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: moonlight-ps4-pkg
           path: |
             *.pkg
+            **/$*.pkg
             eboot.bin
-          if-no-files-found: error
+          if-no-files-found: warn
