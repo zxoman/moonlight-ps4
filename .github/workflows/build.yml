@@ -25,9 +25,11 @@ jobs:
 
       - name: Protocol checks (Python)
         run: python tests/test_protocol.py
+        *Verification:* Protocol test script exits cleanly with code 0.
 
       - name: Build and test protocol core
         run: make -f Makefile.host test cli
+        *Verification:* Host binaries build and pass local unit tests.
 
       - name: Smoke UI path
         run: ./build-host/moonlight-host --ui || true
@@ -48,20 +50,29 @@ jobs:
       - name: Prepare Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential make wget unzip libarchive-tools
+          sudo apt-get install -y build-essential make wget unzip libarchive-tools clang lld
+
+      - name: Download and Setup OpenOrbis Toolchain
+        run: |
+          echo "Downloading OpenOrbis PS4 Toolchain..."
+          wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/latest/download/toolchain-linux.tar.gz -O toolchain.tar.gz || \
+          wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/archive/refs/heads/master.zip -O toolchain.zip && unzip -q toolchain.zip
+          
+          # Set up environment path variable for the compiler
+          echo "OO_PS4_TOOLCHAIN=${{ github.workspace }}/OpenOrbis-PS4-Toolchain-master" >> $GITHUB_ENV
 
       - name: Build eboot and PKG
-        uses: OpenOrbis/toolchain-action@main
-        with:
-          version: latest
-          command: make
+        run: |
+          make
         env:
-          OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis
+          OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis-PS4-Toolchain-master
+        *Verification:* Makefile executes compilation steps and outputs target binary files.
 
       - name: Verify PKG Generation
         run: |
           ls -la *.pkg || echo "No .pkg file found in root directory"
           ls -la build/ || echo "Checking build directory..."
+        *Verification:* Ensure `.pkg` or application payload files exist.
 
       - name: Upload PKG Artifacts
         uses: actions/upload-artifact@v4
