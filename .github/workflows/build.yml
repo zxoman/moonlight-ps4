@@ -48,25 +48,18 @@ jobs:
       - name: Prepare Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential make wget unzip libarchive-tools clang lld
+          sudo apt-get install -y build-essential make wget unzip libarchive-tools clang lld git golang
 
-      - name: Download and Setup OpenOrbis Toolchain Release
+      - name: Clone OpenOrbis Toolchain Repository
         run: |
-          echo "Downloading official OpenOrbis pre-built toolchain..."
-          wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/latest/download/toolchain-linux.tar.gz -O toolchain.tar.gz || \
-          wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.2/toolchain-linux.tar.gz -O toolchain.tar.gz
-          
-          mkdir -p OpenOrbis-Toolchain
-          tar -xzf toolchain.tar.gz -C OpenOrbis-Toolchain
-          
-          # Set paths so make can find orbis-clang and SDK libraries
-          echo "OO_PS4_TOOLCHAIN=${{ github.workspace }}/OpenOrbis-Toolchain" >> $GITHUB_ENV
-          echo "${{ github.workspace }}/OpenOrbis-Toolchain/bin" >> $GITHUB_PATH
+          git clone --recurse-submodules https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git OpenOrbis
+          echo "OO_PS4_TOOLCHAIN=${{ github.workspace }}/OpenOrbis" >> $GITHUB_ENV
 
       - name: Build eboot and PKG
-        run: make
+        run: |
+          make
         env:
-          OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis-Toolchain
+          OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis
 
       - name: Verify PKG Generation
         run: |
