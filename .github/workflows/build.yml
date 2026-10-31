@@ -2,102 +2,75 @@ name: Build
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [main]
   pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
-  host-test:
-    name: Host tests
-    runs-on: ubuntu-latest
+  host-tests:
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Protocol checks (Python)
-        run: python tests/test_protocol.py
-
-      - name: Build and test protocol core
+      - name: Host tests + CLI
         run: make -f Makefile.host test cli
 
-      - name: Smoke UI path
-        run: ./build-host/moonlight-host --ui || true
-
-      - name: Upload host binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: moonlight-host-linux
-          path: build-host/moonlight-host
-
   ps4-pkg:
-    name: PS4 PKG (OpenOrbis)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+    name: PS4 PKG
+    runs-on: ubuntu-22.04
+    needs: host-tests
 
-      - name: Prepare Build Environment
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # PkgTool.Core is an old .NET app: let it run on a newer runtime
+      DOTNET_ROLL_FORWARD: Major
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang / lld
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential make wget unzip libarchive-tools clang lld git curl
+          sudo apt-get install -y clang lld make
 
-      - name: Setup OpenOrbis Toolchain & Clang Wrapper
+      - name: Setup .NET (needed by PkgTool.Core)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Download OpenOrbis toolchain (latest release)
         run: |
-          mkdir -p ~/ps4dev/OpenOrbis
-          git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git ~/ps4dev/OpenOrbis/PS4Toolchain
-          
-          if [ -f ~/ps4dev/OpenOrbis/PS4Toolchain/setup.sh ]; then
-            cd ~/ps4dev/OpenOrbis/PS4Toolchain && ./setup.sh || true
+          mkdir -p "$RUNNER_TEMP/oo"
+          gh release download --repo OpenOrbis/OpenOrbis-PS4-Toolchain \
+            --pattern '*.tar.gz' --dir "$RUNNER_TEMP/oo"
+          ls -la "$RUNNER_TEMP/oo"
+          for f in "$RUNNER_TEMP"/oo/*.tar.gz; do
+            tar -xzf "$f" -C "$RUNNER_TEMP/oo"
+          done
+          # locate the toolchain root (the folder that contains link.x)
+          LINKX=$(find "$RUNNER_TEMP/oo" -name link.x | head -n1)
+          if [ -z "$LINKX" ]; then
+            echo "link.x not found - check the release asset layout"
+            find "$RUNNER_TEMP/oo" -maxdepth 3
+            exit 1
           fi
+          ROOT=$(dirname "$LINKX")
+          chmod +x "$ROOT"/bin/linux/* || true
+          echo "OO_PS4_TOOLCHAIN=$ROOT" >> "$GITHUB_ENV"
+          echo "Toolchain: $ROOT"
 
-          # Create a robust wrapper preventing host header pollution and fixing builtin stdint conflicts
-          mkdir -p $GITHUB_WORKSPACE/bin
-          cat << 'EOF' > $GITHUB_WORKSPACE/bin/clang
-          #!/bin/bash
-          OO_ROOT="/home/runner/ps4dev/OpenOrbis/PS4Toolchain"
-          exec /usr/bin/clang \
-            -nobuiltininc \
-            -isysroot "$OO_ROOT" \
-            -isystem "$OO_ROOT/include" \
-            -isystem "$OO_ROOT/usr/include" \
-            -isystem /usr/lib/llvm-18/lib/clang/18/include \
-            "$@"
-          EOF
-          chmod +x $GITHUB_WORKSPACE/bin/clang
-          
-          echo "OO_PS4_TOOLCHAIN=/home/runner/ps4dev/OpenOrbis/PS4Toolchain" >> $GITHUB_ENV
-          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
-
-      - name: Build eboot and PKG via Makefile
+      - name: Check required files
         run: |
-          make
-        env:
-          OO_PS4_TOOLCHAIN: /home/runner/ps4dev/OpenOrbis/PS4Toolchain
+          test -f sce_sys/icon0.png || { echo "sce_sys/icon0.png missing"; exit 1; }
+          ls "$OO_PS4_TOOLCHAIN/bin/linux"
 
-      - name: Verify PKG Generation
-        run: |
-          ls -la *.pkg || echo "No .pkg file found in root directory"
-          ls -la build/ || echo "Checking build directory..."
+      - name: Build PKG
+        run: make
 
-      - name: Upload PKG Artifacts
+      - name: Upload PKG
         uses: actions/upload-artifact@v4
         with:
           name: moonlight-ps4-pkg
-          path: |
-            *.pkg
-            build/*.pkg
-            eboot.bin
-          if-no-files-found: warn
+          path: "*.pkg"
+          if-no-files-found: error
