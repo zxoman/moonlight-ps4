@@ -59,21 +59,21 @@ jobs:
           mkdir -p ~/ps4dev/OpenOrbis
           git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git ~/ps4dev/OpenOrbis/PS4Toolchain
           
-          # Run OpenOrbis setup if available
           if [ -f ~/ps4dev/OpenOrbis/PS4Toolchain/setup.sh ]; then
             cd ~/ps4dev/OpenOrbis/PS4Toolchain && ./setup.sh || true
           fi
 
-          # Create a correct compiler wrapper that preserves sysroot headers (stdio.h, etc.)
+          # Create a robust wrapper preventing host header pollution and fixing builtin stdint conflicts
           mkdir -p $GITHUB_WORKSPACE/bin
           cat << 'EOF' > $GITHUB_WORKSPACE/bin/clang
           #!/bin/bash
           OO_ROOT="/home/runner/ps4dev/OpenOrbis/PS4Toolchain"
           exec /usr/bin/clang \
+            -nobuiltininc \
             -isysroot "$OO_ROOT" \
             -isystem "$OO_ROOT/include" \
             -isystem "$OO_ROOT/usr/include" \
-            -idirafter /usr/lib/llvm-18/lib/clang/18/include \
+            -isystem /usr/lib/llvm-18/lib/clang/18/include \
             "$@"
           EOF
           chmod +x $GITHUB_WORKSPACE/bin/clang
