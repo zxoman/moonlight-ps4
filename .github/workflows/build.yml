@@ -59,19 +59,26 @@ jobs:
           mkdir -p ~/ps4dev/OpenOrbis
           git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git ~/ps4dev/OpenOrbis/PS4Toolchain
           
-          # Create a custom bin wrapper to prevent host header pollution
+          # Run OpenOrbis setup if available
+          if [ -f ~/ps4dev/OpenOrbis/PS4Toolchain/setup.sh ]; then
+            cd ~/ps4dev/OpenOrbis/PS4Toolchain && ./setup.sh || true
+          fi
+
+          # Create a correct compiler wrapper that preserves sysroot headers (stdio.h, etc.)
           mkdir -p $GITHUB_WORKSPACE/bin
           cat << 'EOF' > $GITHUB_WORKSPACE/bin/clang
           #!/bin/bash
-          exec /usr/bin/clang -nostdinc \
-            -isysroot $OO_PS4_TOOLCHAIN \
-            -isystem $OO_PS4_TOOLCHAIN/include \
-            -isystem $(/usr/bin/clang -print-resource-dir)/include \
+          OO_ROOT="/home/runner/ps4dev/OpenOrbis/PS4Toolchain"
+          exec /usr/bin/clang \
+            -isysroot "$OO_ROOT" \
+            -isystem "$OO_ROOT/include" \
+            -isystem "$OO_ROOT/usr/include" \
+            -idirafter /usr/lib/llvm-18/lib/clang/18/include \
             "$@"
           EOF
           chmod +x $GITHUB_WORKSPACE/bin/clang
           
-          echo "OO_PS4_TOOLCHAIN=$HOME/ps4dev/OpenOrbis/PS4Toolchain" >> $GITHUB_ENV
+          echo "OO_PS4_TOOLCHAIN=/home/runner/ps4dev/OpenOrbis/PS4Toolchain" >> $GITHUB_ENV
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
 
       - name: Build eboot and PKG via Makefile
