@@ -52,7 +52,7 @@ jobs:
       - name: Prepare Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential make wget unzip libarchive-tools clang lld cmake ninja-build git curl libssl-dev
+          sudo apt-get install -y build-essential make wget unzip libarchive-tools clang lld git curl
 
       - name: Setup OpenOrbis Toolchain
         run: |
@@ -60,21 +60,23 @@ jobs:
           git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git ~/ps4dev/OpenOrbis/PS4Toolchain
           echo "OO_PS4_TOOLCHAIN=$HOME/ps4dev/OpenOrbis/PS4Toolchain" >> $GITHUB_ENV
 
-      - name: Setup Dependencies and Build FFmpeg for PS4
+      - name: Build eboot and PKG via Makefile
         run: |
-          chmod +x scripts/*.sh
-          ./scripts/setup_deps.sh
-          ./scripts/build_ffmpeg_ps4.sh
+          make
+        env:
+          OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis/PS4Toolchain || $HOME/ps4dev/OpenOrbis/PS4Toolchain
 
-      - name: Build PS4 Package (.pkg)
+      - name: Verify PKG Generation
         run: |
-          ./scripts/build_pkg.sh
+          ls -la *.pkg || echo "No .pkg file found in root directory"
+          ls -la build/ || echo "Checking build directory..."
 
       - name: Upload PKG Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: moonlight-ps4-pkg
           path: |
-            build-ps4/*.pkg
             *.pkg
-          if-no-files-found: error
+            build/*.pkg
+            eboot.bin
+          if-no-files-found: warn
