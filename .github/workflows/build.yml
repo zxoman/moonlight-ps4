@@ -25,15 +25,12 @@ jobs:
 
       - name: Protocol checks (Python)
         run: python tests/test_protocol.py
-        *Verification:* Protocol test script exits cleanly with code 0.
 
       - name: Build and test protocol core
         run: make -f Makefile.host test cli
-        *Verification:* Host binaries build and pass local unit tests.
 
       - name: Smoke UI path
         run: ./build-host/moonlight-host --ui || true
-        # Note: Headless runner might lack display, allow soft fail or skip if required
 
       - name: Upload host binary
         uses: actions/upload-artifact@v4
@@ -59,14 +56,12 @@ jobs:
           version: latest
           command: make
         env:
-          # Ensures the OpenOrbis toolchain links properly with your repository structure
           OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis
 
       - name: Verify PKG Generation
         run: |
           ls -la *.pkg || echo "No .pkg file found in root directory"
           ls -la build/ || echo "Checking build directory..."
-        *Verification:* Ensure either `.pkg` or the application payload exists.
 
       - name: Upload PKG Artifacts
         uses: actions/upload-artifact@v4
